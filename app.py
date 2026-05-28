@@ -8,6 +8,12 @@ CORS(app)
 
 user_sessions = {}
 
+# মার্কেটের তালিকা
+MARKETS = {
+    "crypto": {"name": "BTC/USDT", "price_range": (65000, 70000)},
+    "forex": {"name": "EUR/USD", "price_range": (1.05, 1.15)}
+}
+
 @app.route('/')
 def home():
     return '007Koba Backend Running!'
@@ -16,20 +22,56 @@ def home():
 def connect():
     data = request.json
     email = data.get('email')
-    user_sessions[email] = {"balance": 10000}
-    return jsonify({"success": True, "balance": 10000})
+    market = data.get('market', 'crypto')  # crypto বা forex
+    
+    user_sessions[email] = {
+        "balance": 10000,
+        "connected": True,
+        "market": market
+    }
+    
+    return jsonify({
+        "success": True,
+        "message": f"Connected to {market.upper()} market",
+        "balance": 10000
+    })
+
+@app.route('/api/balance', methods=['POST'])
+def get_balance():
+    data = request.json
+    email = data.get('email')
+    
+    if email not in user_sessions:
+        return jsonify({"success": False, "error": "Connect first"})
+    
+    return jsonify({
+        "success": True,
+        "balance": user_sessions[email]["balance"]
+    })
 
 @app.route('/api/real-signal', methods=['GET'])
 def real_signal():
-    signal = "CALL" if random.random() > 0.5 else "PUT"
-    confidence = random.randint(65, 95)
-    btc_price = random.randint(65000, 70000)
+    market_type = request.args.get('market', 'crypto')
+    
+    if market_type == "forex":
+        signal = "CALL" if random.random() > 0.5 else "PUT"
+        confidence = random.randint(70, 92)
+        price = round(random.uniform(1.05, 1.15), 5)
+        asset = "EUR/USD"
+    else:
+        signal = "CALL" if random.random() > 0.5 else "PUT"
+        confidence = random.randint(65, 95)
+        price = random.randint(65000, 70000)
+        asset = "BTC/USDT"
+    
     return jsonify({
         "success": True,
         "signal": signal,
         "confidence": confidence,
-        "current_price": btc_price,
-        "asset": "BTC/USDT"
+        "current_price": price,
+        "asset": asset,
+        "market": market_type,
+        "timestamp": datetime.now().isoformat()
     })
 
 @app.route('/api/trade', methods=['POST'])
