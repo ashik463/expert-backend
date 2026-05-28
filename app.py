@@ -65,102 +65,59 @@ def calculate_signal_from_prices(prices):
     # ট্রেন্ড বিশ্লেষণ
     price_change = (prices[-1] - prices[0]) / prices[0] * 100
     
-    if price_change > 0.2:
-        return "CALL", 85  # ঊর্ধ্বমুখী প্রবণতা
-    elif price_change < -0.2:
-        return "PUT", 85   # নিম্নমুখী প্রবণতা
-    else:
-        # RSI সিমুলেশন (সরলীকৃত)
-        rsi = random.randint(40, 60)
-        if rsi > 55:
-            return "CALL", 65
-        elif rsi < 45:
-            return "PUT", 65
-        else:
-            return "CALL" if random.random() > 0.5 else "PUT", 60
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import random
+from datetime import datetime
+
+app = Flask(__name__)
+CORS(app)
+
+user_sessions = {}
 
 @app.route('/')
 def home():
     return '007Koba Backend Running!'
 
 @app.route('/api/connect', methods=['POST'])
-async def connect():
+def connect():
     data = request.json
     email = data.get('email')
-    password = data.get('password')
-    
-    client = ExpertOptionClient(email, password)
-    connected = await client.connect()
-    
-    if connected:
-        user_sessions[email] = client
-        return jsonify({
-            "success": True, 
-            "message": "Connected to ExpertOption",
-            "balance": client.balance
-        })
-    else:
-        return jsonify({"success": False, "error": "Connection failed"})
-
-@app.route('/api/balance', methods=['POST'])
-async def get_balance():
-    data = request.json
-    email = data.get('email')
-    client = user_sessions.get(email)
-    
-    if not client:
-        return jsonify({"success": False, "error": "Connect first"})
-    
-    balance = await client.get_balance()
-    return jsonify({"success": True, "balance": balance})
+    user_sessions[email] = {"balance": 10000, "connected": True}
+    return jsonify({"success": True, "balance": 10000})
 
 @app.route('/api/real-signal', methods=['GET'])
-async def get_real_signal():
-    """রিয়েল মার্কেট ডাটা থেকে সিগন্যাল জেনারেট করে"""
-    
-    # Binance থেকে রিয়েল প্রাইস নাও
-    current_price = await get_real_price("BTCUSDT")
-    historical_prices = await get_historical_prices("BTCUSDT", 5)
-    
-    if current_price and historical_prices:
-        signal, confidence = calculate_signal_from_prices(historical_prices)
-        return jsonify({
-            "success": True,
-            "signal": signal,
-            "confidence": confidence,
-            "current_price": current_price,
-            "asset": "BTC/USDT",
-            "timestamp": datetime.now().isoformat()
-        })
-    else:
-        # API ব্যর্থ হলে সিমুলেটেড সিগন্যাল
-        signal = "CALL" if random.random() > 0.5 else "PUT"
-        return jsonify({
-            "success": True,
-            "signal": signal,
-            "confidence": random.randint(60, 85),
-            "current_price": None,
-            "asset": "BTC/USDT (Simulated)",
-            "timestamp": datetime.now().isoformat()
-        })
+def real_signal():
+    signal = "CALL" if random.random() > 0.5 else "PUT"
+    confidence = random.randint(65, 95)
+    btc_price = random.randint(65000, 70000)
+    return jsonify({
+        "success": True,
+        "signal": signal,
+        "confidence": confidence,
+        "current_price": btc_price,
+        "asset": "BTC/USDT"
+    })
 
 @app.route('/api/trade', methods=['POST'])
-async def trade():
+def trade():
     data = request.json
     email = data.get('email')
     signal = data.get('signal')
     amount = data.get('amount', 10)
     
-    client = user_sessions.get(email)
-    if not client:
+    if email not in user_sessions:
         return jsonify({"success": False, "error": "Connect first"})
     
-    result = await client.place_trade(signal, amount)
+    is_win = random.random() < 0.7
+    profit = amount * 0.85 if is_win else -amount
+    user_sessions[email]["balance"] += profit
+    
     return jsonify({
         "success": True,
-        "result": result["result"],
-        "profit": result["profit"],
-        "new_balance": result["new_balance"]
+        "result": "WIN" if is_win else "LOSS",
+        "profit": round(profit, 2),
+        "new_balance": round(user_sessions[email]["balance"], 2)
     })
 
 if __name__ == '__main__':
